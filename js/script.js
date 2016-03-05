@@ -2,7 +2,9 @@
 var canvas = document.getElementById('map'),
     context = canvas.getContext('2d'),
     UnitWidth = 30,
-    UnitHeight = 30;
+    UnitHeight = 30,
+    blastImages = ['image/blast1.gif','image/blast2.gif','image/blast3.gif',
+        'image/blast4.gif','image/blast5.gif','image/blast6.gif','image/blast7.gif','image/blast8.gif'];
 
 function inherit(Child, Parent) {
     var F = function(){};
@@ -116,7 +118,6 @@ Walls.prototype = {
                 this.initialWalls.push({x: wall.x, y: wall.y});
             }
         }
-        console.log(this.initialWalls);
     },
 
     checkDestoryed : function (wall) {
@@ -136,7 +137,8 @@ var walls = new Walls(
     {
         urls: ['image/walls.gif', 'image/wall.gif'],
         positions: [{id: 0, x: 100, y: 100, w: 30, h: 30},
-            {id: 0, x: 200, y: 200, w: 30, h: 30}]
+            {id: 0, x: 200, y: 200, w: 30, h: 30},
+            {id:0, x: 230, y: 200, w: 30, h: 30}]
     }
 );
 
@@ -149,8 +151,10 @@ var Tank = function(props) {
     this.h = UnitHeight;
     this.speed = 3;
     this.images = new imageLoader();
+    this.blastImages = new imageLoader();
     this.images.imageUrls = props.url || [];
     this.collisionState = 0;
+    this.blastState = 0;
     this.dirState = {
         up: 0,
         down: 0,
@@ -183,6 +187,7 @@ Tank.prototype = {
 
     init: function(index) {
         this.images.loadImages();
+        this.blastImages.loadImages();
         this.setDirection(index);
     },
 
@@ -201,17 +206,46 @@ Tank.prototype = {
         }
     },
 
+    back: function() {
+        if (this.dir == 'up') {
+            this.y += this.speed;
+        }
+        if (this.dir == 'down') {
+            this.y -= this.speed;
+        }
+        if (this.dir == 'left') {
+            this.x += this.speed;
+        }
+        if (this.dir == 'right') {
+            this.x -= this.speed;
+        }
+    },
+
     detectCollision: function() {
+        for (var i = 0; i < walls.initialWalls.length; i++) {
+            var wall = walls.initialWalls[i];
+
+            if ( walls.checkDestoryed(wall) != 0 &&
+                this.x > wall.x-UnitWidth &&
+                this.x < wall.x+UnitWidth/4 &&
+                this.y < wall.y+UnitHeight/4 &&
+                this.y > wall.y-UnitHeight ) {
+
+                this.collisionState = 1;
+            }
+
+        }
+
         if (this.x <= 0 && this.dir == 'left') {
             this.collisionState = 1;
         }
-        if (this.x >= canvas.clientWidth-this.w && this.dir == 'right') {
+        if (this.x >= canvas.clientWidth-UnitWidth && this.dir == 'right') {
             this.collisionState = 1;
         }
         if (this.y <= 0 && this.dir == 'up') {
             this.collisionState = 1;
         }
-        if (this.y >= canvas.clientHeight-this.h && this.dir == 'down') {
+        if (this.y >= canvas.clientHeight-UnitHeight && this.dir == 'down') {
             this.collisionState = 1;
         }
     },
@@ -221,7 +255,39 @@ Tank.prototype = {
         if (this.collisionState != 0) {
             this.dirState[this.dir] = 0;
             this.collisionState = 0;
+            return 0;
         }
+        return -1;
+    },
+
+    tankBlast: function() {
+        var count = 0;
+        var that = this;
+        var interval = setInterval(function() {
+            if (count >= 7) {
+                clearInterval(interval);
+            }
+            context.clearRect(that.x-UnitWidth*3/4, that.y-UnitHeight*3/4, 2*UnitWidth, 2*UnitHeight);
+            console.log(count);
+            /*var image = that.blastImages.getImage(blastImages[count]);
+            context.drawImage(image, that.x-UnitWidth*3/4, that.y-UnitHeight*3/4, 2*UnitWidth, 2*UnitHeight);
+            */count ++;
+
+        }, 20)
+    },
+
+    bulletsDetect: function(bullets) {
+        for (var i = 0; i < bullets.length; i++) {
+           if (bullets[i].x > this.x-bullets[i].w &&
+               bullets[i].x < this.x+UnitWidth/4 &&
+               bullets[i].y < this.y+UnitHeight/4 &&
+               bullets[i].y > this.y-bullets[i].h ) {
+
+               return 0;
+           }
+        }
+
+        return -1;
     }
 };
 
@@ -237,11 +303,14 @@ var Bullet = function(props) {
     this.shotState = false;
     this.images = new imageLoader();
     this.images.imageUrls = args.url || [];
+    this.blastImages = new imageLoader();
+    this.blastImages.imageUrls = blastImages;
 };
 
 Bullet.prototype = {
     init: function() {
         this.images.loadImages();
+        this.blastImages.loadImages();
     },
 
     move: function() {
@@ -295,33 +364,14 @@ Bullet.prototype = {
         for (var i = 0; i < walls.initialWalls.length; i++) {
             var wall = walls.initialWalls[i];
 
-            /*if (this.dir == 'up' || this.dir == 'down') {
-                if ((this.x > wall.x - this.w && this.x < wall.x + UnitWidth + this.w) &&
-                    (this.y <= wall.y + UnitHeight && this.y >= wall.y) &&
-                    walls.checkDestoryed(wall) != 0) {
-                    this.destoryWalls(wall);
-                    //this.moveBullet();
-                    return 'blast';
-                }
-            }
-
-            if (this.dir == 'left' || this.dir == 'right') {
-                if ((this.x <= wall.x + UnitWidth && this.x >= wall.x) &&
-                    (this.y > wall.y - this.h && this.y < wall.y + UnitHeight + this.h) &&
-                    walls.checkDestoryed(wall) != 0) {
-                    this.destoryWalls(wall);
-                    //this.moveBullet();
-                    return 'blast';
-                }
-            }*/
-
             if ( walls.checkDestoryed(wall) != 0 &&
                 this.x > wall.x-this.w &&
                 this.x < wall.x+UnitWidth/4 &&
                 this.y < wall.y+UnitHeight/4 &&
                 this.y > wall.y-this.h ) {
 
-                this.destoryWalls(wall);
+                this.destoryWalls(wall, this.x, this.y);
+                this.bulletBlast(this.x, this.y);
                 return 'blast';
             }
 
@@ -338,6 +388,41 @@ Bullet.prototype = {
 
     destoryWalls: function(wall) {
         walls.destoryedWalls.push({x: wall.x, y: wall.y});
+        if (this.dir == 'up' || this.dir == 'down') {
+            if (this.x > wall.x) {
+                walls.destoryedWalls.push({x: wall.x-UnitWidth/4, y: wall.y});
+                walls.destoryedWalls.push({x: wall.x+UnitWidth/4, y: wall.y});
+                walls.destoryedWalls.push({x: wall.x+UnitWidth/2, y: wall.y});
+            } else {
+                walls.destoryedWalls.push({x: wall.x+UnitWidth/4, y: wall.y});
+            }
+        }
+
+        if (this.dir == 'left' || this.dir == 'right') {
+            if (this.y > wall.y) {
+                walls.destoryedWalls.push({x: wall.x, y: wall.y-UnitHeight/4});
+                walls.destoryedWalls.push({x: wall.x, y: wall.y+UnitHeight/4});
+                walls.destoryedWalls.push({x: wall.x, y: wall.y+UnitHeight/2});
+            } else {
+                walls.destoryedWalls.push({x: wall.x, y: wall.y-UnitHeight/4});
+            }
+        }
+    },
+
+    bulletBlast: function(x, y) {
+        var count = 1;
+        var that = this;
+        var interval = setInterval(function() {
+            if (count >= 7) {
+                clearInterval(interval);
+            }
+            context.clearRect(x-UnitWidth*3/8, y-UnitHeight*3/8, UnitWidth, UnitHeight);
+            console.log(count);
+            var image = that.blastImages.getImage(blastImages[count]);
+            context.drawImage(image, x-UnitWidth*3/8, y-UnitHeight*3/8, UnitWidth, UnitHeight);
+            count += 2;
+
+        }, 25);
     }
 };
 
@@ -366,9 +451,17 @@ var Hero = function(props) {
 inherit(Hero, Tank);
 
 Hero.prototype.actions = function() {
-    this.detectStop();
     this.move();
+    var flag = this.detectStop();
+    if (flag == 0) {
+        this.back();
+    }
+    this.bulletDetect();
+    this.setDirection( this.dir );
 
+};
+
+Hero.prototype.bulletDetect = function() {
     if (this.bulletFlag == 'shot') {
         this.bulletFlag = 'detect';
         this.bullet.shotState = true;
@@ -382,9 +475,6 @@ Hero.prototype.actions = function() {
             this.bullet.shotState = false;
         }
     }
-
-    this.setDirection( this.dir );
-
 };
 
 //敌方炮灰类
@@ -406,14 +496,20 @@ var Enemy = function(props) {
 };
 inherit(Enemy, Tank);
 
-Enemy.prototype.actions = function() {
+Enemy.prototype.actions = function(heroBullet) {
     this.dirState[ this.dir ] = 1;
-    this.detectCollision();
     if (this.collisionState == 0) {
         this.move();
     }
+    this.detectCollision();
+
+    if (this.bulletsDetect([heroBullet]) == 0) {
+        this.blastState = 1;
+        this.tankBlast();
+    }
 
     if (this.collisionState != 0) {
+        this.back();
         this.dirState[ this.dir ] = 0;
         var dirNum = Math.floor(Math.random()*4);
         while (this.dirQueue[dirNum] == this.dir) {
@@ -516,8 +612,12 @@ function play() {
     context.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
     walls.setImage();
     hero.actions();
-    enemy.actions();
+    if (enemy.blastState == 0) {
+        enemy.actions(hero.bullet);
+    }
 }
+
+
 
 window.addEventListener('load', function(e) {
     hero.init(0);
